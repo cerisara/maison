@@ -1,5 +1,7 @@
 
 import socket                   # Import socket module
+import struct
+import ntpath
 
 port = 38634                    # Reserve a port for your service every new transfer wants a new port or you must wait.
 s = socket.socket()             # Create a socket object
@@ -9,12 +11,18 @@ s.listen(5)                     # Now wait for client connection.
 
 print 'Server listening....'
 
-
 while True:
     conn, addr = s.accept()     # Establish connection with client.
     print 'Got connection from', addr
 
-    with open('received_file', 'wb') as f:
+    nomlen = conn.recv(4)
+    nomleni = struct.unpack('>I',nomlen)[0]
+    print("nom len ",nomleni)
+    nom = conn.recv(nomleni)
+    print("nom ",nom)
+    basenom = ntpath.basename(nom)
+
+    with open("/var/www/html/xtof/"+basenom, 'wb') as f:
         print 'file opened'
         while True:
             print('receiving data...')

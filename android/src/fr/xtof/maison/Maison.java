@@ -1,6 +1,12 @@
 package fr.xtof.maison;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.io.File;
+import java.nio.charset.Charset;
+import java.nio.ByteBuffer;
+import java.io.OutputStream;
+import java.io.FileInputStream;
+import java.net.Socket;
 import java.util.List;
 import com.loopj.android.http.*;
 import android.app.Dialog;
@@ -62,7 +68,7 @@ public class Maison extends Activity {
 		});
 	}
 
-	/** Called when the user touches the PUT button */
+	/** Called when the user touches the VIEW button */
 	public void geturl(View view) {
 		new AlertDialog.Builder(this)
 			.setTitle("Upload tasks")
@@ -90,6 +96,10 @@ public class Maison extends Activity {
             if (results.size()==0) msg("found 0 file in "+basedir);
             else msg("found "+results.get(0));
 
+            for (String fich: results) {
+                msg("uploading "+fich+" ...");
+                upload(fich);
+            }
             /*
                try {
                s=URLEncoder.encode(s,"UTF-8");
@@ -101,7 +111,53 @@ public class Maison extends Activity {
                */
         }
 
+        private Thread uploader = null;
+        private ArrayBlockingQueue<String> toupload = new ArrayBlockingQueue<String>(100);
 
+        private void upload(final String f) {
+            if (uploader==null) {
+                uploader = new Thread(new Runnable() {
+                    public void run() {
+                        for (;;) {
+                            try {
+                                String ff = toupload.take();
+                                if (ff=="END") break;
+                                Socket s = new Socket("cerisara.duckdns.org",38634);
+                                OutputStream output = s.getOutputStream();
+                                {
+                                    byte[] nom = ff.getBytes(Charset.forName("UTF-8"));
+                                    int nomlen = nom.length;
+                                    ByteBuffer b = ByteBuffer.allocate(4);
+                                    //b.order(ByteOrder.BIG_ENDIAN); // optional, the initial order of a byte buffer is always BIG_ENDIAN.
+                                    b.putInt(nomlen);
+                                    byte[] nomlenb = b.array();
+                                    output.write(nomlenb);
+                                    output.write(nom);
+                                }
+                                byte[] data = new byte[1024];
+                                FileInputStream fin = new FileInputStream(ff);
+                                for (;;) {
+                                    int nread=fin.read(data);
+                                    if (nread<0) break;
+                                    output.write(data,0,nread);
+                                }
+                                output.close();
+                                if (s!=null) s.close();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        uploader=null;
+                    }
+                });
+                uploader.start();
+            }
+            try {
+                toupload.put(f);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
 
 	private class DetProgressTask extends AsyncTask<String, Void, Boolean> {
 
